@@ -206,13 +206,12 @@ for id in range(500):
     else:
         eigvals, eigvecs = la.eigh(Ham)
         gs = eigvecs[:,0]
-        """
         n = 1
         while(eigvals[n] == eigvals[0] and n < spinno):
             gs += eigvecs[:,n]
             n += 1
         gs /= np.sqrt(n)
-        """
+        
         #print(gs)
         
     p0x, p0y, p0z = probabilities(gs, spinno, sparse)
@@ -226,14 +225,14 @@ for id in range(500):
 
     #measurements = measurements.transpose()
         
-    filename = "MIS2/mis_{}N_{}T_id{}_shadow.txt".format(spinno, T, id)
+    filename = "MIS/mis_{}N_{}T_id{}_shadow.txt".format(spinno, T, id)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     np.savetxt(filename, measurements.astype(int), fmt='%i')
     
-    filename2 = "MIS2/mis_{}N_{}T_id{}_couplings.txt".format(spinno, T, id)
+    filename2 = "MIS/mis_{}N_{}T_id{}_couplings.txt".format(spinno, T, id)
     os.makedirs(os.path.dirname(filename2), exist_ok=True)
     np.savetxt(filename2, edges.astype(int), fmt='%i')
-    
-    filenamex = "MIS2/mis_{}N_{}T_id{}_actualsize.txt".format(spinno, T, id)
+   
+    filenamex = "MIS/mis_{}N_{}T_id{}_actualsize.txt".format(spinno, T, id)
     os.makedirs(os.path.dirname(filenamex), exist_ok=True)
     np.savetxt(filenamex, 1-p0z, fmt='%1.12f')

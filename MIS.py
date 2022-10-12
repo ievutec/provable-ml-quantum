@@ -31,7 +31,7 @@ from sklearn.ensemble import RandomForestRegressor
 # Load data
 
 spinno = 5
-T = 100
+T = 200
 
 Xfull = [] # Shape = (number of data) x (number of params)
 Ytrain = [] # Shape = (number of data) x (number of pairs), estimated 2-point correlation functions
@@ -158,8 +158,10 @@ print("RBF kernel (will be constructed in sklearn)")
 
 train_idx, test_idx, _, _ = train_test_split(range(len(Xfull)), range(len(Xfull)), test_size=0.4, random_state=0)
 
-models = []
-kernels = []
+
+total_mis_predicted_dir = np.zeros(3)
+total_mis_predicted_ntk = np.zeros((4,3))
+total_mis_true = np.zeros((spinno,3))
 
 for k in range(spinno):
     # each k corresponds to the correlation function in a pair of qubits
@@ -172,20 +174,35 @@ for k in range(spinno):
             #print(kernel[i])
             kernel[i] /= np.linalg.norm(kernel[i])
         
-        # consider the k-th pair
+        # consider the k-th spin expectation value
         global k
         
         # training data (estimated from measurement data)
         y = np.array([Ytrain[i][k] for i in range(len(Xfull))])
         X_train, X_test, y_train, y_test = train_test_split(kernel, y, test_size=0.4, random_state=0)
         
-        #print("X test shape:", X_test.shape)
-        #print("Y test shape:", y_test.shape)
+        mis_expec = y_test[:3]
+        mis_edges = X_test[:3]
+        
+        y_test = y_test[3:]
+        X_test = X_test[3:]
+        
+        print("X test shape:", X_test.shape)
+        print("Y test shape:", y_test.shape)
 
         # testing data (exact expectation values)
         y_clean = np.array([Yfull[i][k] for i in range(len(Xfull))])
         _, _, _, y_test_clean = train_test_split(kernel, y_clean, test_size=0.4, random_state=0)
-
+        
+        mis1 = y_test_clean[0]
+        mis2 = y_test_clean[1]
+        mis3 = y_test_clean[2]
+        y_test_clean = y_test_clean[3:]
+        
+        total_mis_true[k,0] = mis1
+        total_mis_true[k,1] = mis2
+        total_mis_true[k,2] = mis3
+        
         # use cross validation to find the best method + hyper-param
         best_cv_score, test_score = 999.0, 999.0
         best_model = KernelRidge(kernel=opt, alpha=1/(2))
@@ -199,46 +216,42 @@ for k in range(spinno):
                     test_score = np.linalg.norm(prediction - y_test_clean.ravel()) / (len(y_test) ** 0.5)
                     best_model = clf
                     best_cv_score = score
+                    val1 = clf.predict(mis_edges[0].reshape(1, -1))
+                    val2 = clf.predict(mis_edges[1].reshape(1, -1))
+                    val3 = clf.predict(mis_edges[2].reshape(1, -1))
         
         #for i in range(len(prediction)):
         #    print("Original value: ", y_test_clean.ravel()[i])
         #    print("Prediction: ", prediction.ravel()[i])
         #    print("------")
         
-        return best_cv_score, test_score, best_model
+        return best_cv_score, test_score, val1, val2, val3
 
     # Dirichlet
-    b = 900
-    a1, b1, best_model = train_and_predict(kernel_dir)
-    print("Dirich. kernel", a1, b1)
-    if(b1 < b) : b = b1
+    bcv, ts, v1, v2, v3 = train_and_predict(kernel_dir)
+    print("Dirich. kernel", bcv, ts)
+    total_mis_predicted_dir[0] += v1
+    total_mis_predicted_dir[1] += v2
+    total_mis_predicted_dir[2] += v3
+    
+    print("MIS size true (so far): ", np.sum(total_mis_true, axis=0))
+    print("MIS size predicted Dirichlet: ", total_mis_predicted_dir)
+    
     # RBF
     #print("Gaussi. kernel", train_and_predict(Xfull, opt="rbf"))
     # Neural tangent
-    for kernel_NN in list_kernel_NN:
-        a1, b1, model = train_and_predict(kernel_NN)
-        if(b1 < b):
-            b = b1
-            best_model = model
-        print("Neur. T kernel", a1, b1)
-        
-    models.append(best_model)
-    kernels.append()
     
-for id in range(10):
-
-    prob = np.random.randint(500, size=1)
-
-    pairs = list(iter.combinations(range(1, spinno+1), 2))
-    pairs = np.array(pairs)
-    edges = kernel[prob[0]]
-    for i in range(len(edges)):
-        if(edges[i] == 1): print(pairs[i])
+    cnt = 0
+    for kernel_NN in list_kernel_NN:
+    
+        bcv, ts, v1, v2, v3 = train_and_predict(kernel_NN)
+        print("Neur. T kernel {}".format(cnt+1), bcv, ts)
+        total_mis_predicted_ntk[cnt,0] += v1
+        total_mis_predicted_ntk[cnt,1] += v2
+        total_mis_predicted_ntk[cnt,2] += v3
         
-    predicted_mis = 0.
-    for i in range(spinno):
-        prediction = models[i].predict(edges)
-        predicted_mis += prediction
+        cnt += 1
         
-    print("Predicted MIS size: ", predicted_mis)
-    print("-----")
+        print("MIS size true (so far): ", np.sum(total_mis_true, axis=0))
+        print("MIS size predicted NTK: ", total_mis_predicted_ntk)
+        print("MIS size predicted Dirichlet: ", total_mis_predicted_dir)
